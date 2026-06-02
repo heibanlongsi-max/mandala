@@ -267,8 +267,8 @@ b2.addEventListener('click',async()=>{
       }
     });
     micAnalyser=micAC.createAnalyser();
-    micAnalyser.fftSize=1024;
-    micAnalyser.smoothingTimeConstant=0.7;
+    micAnalyser.fftSize=256;
+    micAnalyser.smoothingTimeConstant=0.3;
     micAC.createMediaStreamSource(s).connect(micAnalyser);
     micStream=s;micOn=true;
     b2.textContent='🔴 聞いています…';
@@ -282,7 +282,7 @@ function getVoice(){
   if(!micOn||!micAnalyser)return 0;
   const d=new Uint8Array(micAnalyser.frequencyBinCount);
   micAnalyser.getByteFrequencyData(d);
-  return Math.min(d.reduce((a,b)=>a+b,0)/d.length/35,1);
+  return Math.min(d.reduce((a,b)=>a+b,0)/d.length/15,1);
 }
 
 // ---- マンダラ描画ヘルパー ----
