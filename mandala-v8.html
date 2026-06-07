@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Cosmos Mandala v8</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; width:100vw; height:100vh; }
+canvas { position:fixed; top:0; left:0; }
+#breath {
+  position:fixed; top:40px; left:50%;
+  transform:translateX(-50%);
+  z-index:10; font-size:clamp(18px,5vw,34px);
+  font-weight:bold; letter-spacing:6px;
+  pointer-events:none; white-space:nowrap;
+  text-shadow:0 0 20px currentColor, 0 0 45px currentColor;
+}
+#vol-wrap {
+  position:fixed; left:10px; top:50%;
+  transform:translateY(-50%);
+  z-index:10; display:none;
+  flex-direction:column; align-items:center; gap:4px;
+}
+#vol-label { font-size:9px; color:rgba(255,215,0,0.4); letter-spacing:1px; }
+#vol-bar {
+  width:10px; height:140px;
+  background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,215,0,0.2);
+  border-radius:5px; overflow:hidden; position:relative;
+}
+#vol-fill {
+  position:absolute; bottom:0; left:0; right:0;
+  background:linear-gradient(to top,#ff3030,#ffaa00,#ffd700);
+  border-radius:5px; height:0%; transition:height 0.05s;
+}
+#ui {
+  position:fixed; bottom:8px; left:50%;
+  transform:translateX(-50%);
+  z-index:10; display:flex; flex-wrap:wrap;
+  gap:5px; justify-content:center; width:96vw;
+}
+button {
+  background:rgba(120,60,0,0.25);
+  border:1px solid rgba(255,215,0,0.45);
+  color:#ffd700; padding:5px 11px;
+  border-radius:14px; cursor:pointer;
+  font-size:11px; letter-spacing:1px;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+button.active { background:rgba(180,100,0,0.55); border-color:#ffd700; }
+#btn-stop { background:rgba(120,20,20,0.25); border-color:rgba(255,80,80,0.5); color:#ff8080; }
+#btn-stop.active { background:rgba(150,30,30,0.6); }
+#btn-mic { background:rgba(20,120,20,0.2); border-color:rgba(80,255,80,0.4); color:#80ff80; }
+#btn-mic.active { background:rgba(30,160,30,0.55); border-color:#80ff80; color:#fff; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="breath">Inhale</div>
+<div id="hz-desc" style="
+  position:fixed; top:12px; left:50%;
+  transform:translateX(-50%);
+  z-index:10; font-size:11px; letter-spacing:2px;
+  color:rgba(255,215,0,0.8); pointer-events:none;
+  white-space:nowrap; text-align:center;
+  text-shadow:0 0 12px rgba(255,215,0,0.6);
+">528Hz｜愛・変容・DNA修復</div>
+<div id="vol-wrap">
+  <div id="vol-label">VOL</div>
+  <div id="vol-bar"><div id="vol-fill"></div></div>
+</div>
+<div id="ui">
+  <button id="b174" onclick="setHz(174)">174Hz</button>
+  <button id="b285" onclick="setHz(285)">285Hz</button>
+  <button id="b396" onclick="setHz(396)">396Hz</button>
+  <button id="b417" onclick="setHz(417)">417Hz</button>
+  <button id="b528" class="active" onclick="setHz(528)">528Hz</button>
+  <button id="b639" onclick="setHz(639)">639Hz</button>
+  <button id="b741" onclick="setHz(741)">741Hz</button>
+  <button id="b852" onclick="setHz(852)">852Hz</button>
+  <button id="b963" onclick="setHz(963)">963Hz</button>
+  <button id="bsound" onclick="toggleSound()">🔔 Sound</button>
+  <button id="spd1" class="active" onclick="setSpeed(1)">Slow</button>
+  <button id="spd2" onclick="setSpeed(2)">Mid</button>
+  <button id="spd3" onclick="setSpeed(3)">Fast</button>
+  <button id="btn-mic" onclick="toggleMic()">🎤 Voice</button>
+  <button id="btn-stop" onclick="toggleStop()">⏹ Stop</button>
+</div>
+<script>
+const cv=document.getElementById('c');
+const ctx=cv.getContext('2d');
+let W,H,cx,cy;
+
+const BONJI=['अ','आ','इ','ई','उ','ऊ','ए','ऐ','ओ','औ','अं','अः','क','ख','ग','घ','ङ','च','छ','ज','झ','ञ','ट','ड','ण','त','द','न','प','ब','म'];
+
+let t=0, bp=0, hz=528;
+let soundOn=false, aCtx=null, oscs=[];
+let stars=[];
+let micActive=false, micStream=null, analyser=null, micData=null;
+let micVolume=0, rotBoost=1;
+let stopped=false, animId=null;
+
+// ★各リングが独立した角度変数を持つ
+// 層0(最外)→右、層1→左、層2→右、...
+const RING_DEFS=[
+  {ratio:0.92, n:20, lw:1.5, al:0.45, spd:0.004},  // 右
+  {ratio:0.78, n:16, lw:1.2, al:0.38, spd:0.006},  // 左
+  {ratio:0.64, n:14, lw:1.4, al:0.42, spd:0.005},  // 右
+  {ratio:0.50, n:12, lw:1.2, al:0.38, spd:0.007},  // 左
+  {ratio:0.37, n:10, lw:1.3, al:0.40, spd:0.006},  // 右
+  {ratio:0.25, n:8,  lw:1.1, al:0.38, spd:0.008},  // 左
+  {ratio:0.14, n:6,  lw:1.2, al:0.42, spd:0.007},  // 右
+];
+let ringAngles = RING_DEFS.map(()=>0);
+let bonjiPos = 0; // ★小数で滑らかに進む梵字位置
+
+const SP={
+  1:{i:240,h1:180,e:480,h2:180},
+  2:{i:180,h1:180,e:360,h2:180},
+  3:{i:120,h1:180,e:240,h2:180},
+};
+let speed=1, phase='i', pf=0;
+const PCOL={i:'#FF8C00',h1:'#FFD700',e:'#6699FF',h2:'#FFD700'};
+const PTXT={i:'Inhale',h1:'Hold',e:'Exhale',h2:'Hold'};
+
+function setSpeed(s){
+  speed=s;
+  [1,2,3].forEach(x=>document.getElementById('spd'+x).classList.remove('active'));
+  document.getElementById('spd'+s).classList.add('active');
+  phase='i'; pf=0;
+}
+
+function initStars(){
+  stars=Array.from({length:280},()=>({
+    x:Math.random()*W, y:Math.random()*H,
+    r:Math.random()*1.5+0.2,
+    a:Math.random()*Math.PI*2,
+    sp:Math.random()*0.005+0.001,
+    c:Math.random()<0.3?[255,215,0]:Math.random()<0.4?[180,100,255]:[255,255,255]
+  }));
+}
+function resize(){
+  W=cv.width=window.innerWidth;
+  H=cv.height=window.innerHeight;
+  cx=W/2; cy=H/2; initStars();
+}
+
+function getPalette(h){
+  // 周波数ごとに異なる色彩
+  if(h===174) return {p1:[150,100,255],p2:[80,40,200],p3:[200,150,255],p4:[120,80,220]}; // 深紫
+  if(h===285) return {p1:[0,200,150],p2:[0,150,100],p3:[100,255,200],p4:[0,180,130]};   // エメラルド
+  if(h===396) return {p1:[180,50,255],p2:[120,0,200],p3:[220,100,255],p4:[150,30,220]}; // 紫
+  if(h===417) return {p1:[255,80,80],p2:[200,40,40],p3:[255,150,100],p4:[220,60,60]};  // 赤
+  if(h===528) return {p1:[255,215,0],p2:[255,120,0],p3:[200,60,255],p4:[255,180,50]};  // 金
+  if(h===639) return {p1:[0,200,255],p2:[0,100,200],p3:[100,220,255],p4:[0,180,220]};  // 水色
+  if(h===741) return {p1:[0,255,100],p2:[0,180,60],p3:[100,255,150],p4:[0,220,80]};    // 緑
+  if(h===852) return {p1:[255,150,0],p2:[200,80,0],p3:[255,200,100],p4:[220,120,0]};   // オレンジ
+  if(h===963) return {p1:[255,255,255],p2:[180,180,255],p3:[220,180,255],p4:[200,200,255]}; // 白
+  return {p1:[255,215,0],p2:[255,120,0],p3:[200,60,255],p4:[255,180,50]};
+}
+
+// Hz別の説明テキスト（キーを文字列に統一）
+const HZ_DESC={
+  '174':'安定・痛みの軽減',
+  '285':'修復・自然治癒',
+  '396':'不安からの解放',
+  '417':'ネガティブの変化',
+  '528':'愛・変容・DNA修復',
+  '639':'人間関係の調和',
+  '741':'浄化・直感',
+  '852':'直感・覚醒',
+  '963':'高次元とのつながり'
+};
+
+// サーフボード形（尖った楕円）を描く関数
+function drawSurfboard(x, y, angle, w, h, color){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  // 上に尖り、下に丸いサーフボード形
+  ctx.moveTo(0, -h);
+  ctx.bezierCurveTo(w, -h*0.2, w, h*0.5, 0, h);
+  ctx.bezierCurveTo(-w, h*0.5, -w, -h*0.2, 0, -h);
+  ctx.closePath();
+  ctx.fillStyle=color;
+  ctx.fill();
+  ctx.restore();
+}
+
+// 花びら（蓮の形）
+function drawPetal(r1, r2, fillColor, strokeColor){
+  ctx.beginPath();
+  ctx.moveTo(0, -r2);
+  ctx.bezierCurveTo(r1*0.6,-r2*0.4, r1*0.6,r2*0.4, 0, r2);
+  ctx.bezierCurveTo(-r1*0.6,r2*0.4, -r1*0.6,-r2*0.4, 0,-r2);
+  ctx.closePath();
+  if(fillColor){ctx.fillStyle=fillColor;ctx.fill();}
+  if(strokeColor){ctx.strokeStyle=strokeColor;ctx.lineWidth=0.7;ctx.stroke();}
+}
+
+function draw(){
+  ctx.fillStyle='rgba(0,0,8,0.16)';
+  ctx.fillRect(0,0,W,H);
+
+  // 星
+  stars.forEach(s=>{
+    s.a+=s.sp;
+    const al=(Math.sin(s.a)+1)/2*0.75+0.1;
+    ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${s.c[0]},${s.c[1]},${s.c[2]},${al})`;
+    ctx.fill();
+  });
+
+  const scale=0.015+bp*0.985;
+  const maxR=Math.min(W,H)*0.42;
+  const R=maxR*scale;
+  const P=getPalette(hz);
+  const [r1,g1,b1]=P.p1;
+  const [r2,g2,b2]=P.p2;
+  const [r3,g3,b3]=P.p3;
+  const [r4,g4,b4]=P.p4;
+
+  // 中心に移動
+  ctx.save();
+  ctx.translate(cx,cy);
+
+  // 背景オーラ
+  for(let i=3;i>=0;i--){
+    const or=R*(1.4+i*0.3); if(or<2)continue;
+    const gd=ctx.createRadialGradient(0,0,R*0.3,0,0,or);
+    gd.addColorStop(0,'rgba(0,0,0,0)');
+    gd.addColorStop(0.5,`rgba(${r3},${g3},${b3},${0.06-i*0.012})`);
+    gd.addColorStop(0.8,`rgba(${r2},${g2},${b2},${0.03})`);
+    gd.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath();ctx.arc(0,0,or,0,Math.PI*2);
+    ctx.fillStyle=gd;ctx.fill();
+  }
+
+  // 銀河アーム
+  ctx.save();ctx.rotate(t*0.03*rotBoost);
+  for(let arm=0;arm<6;arm++){
+    ctx.save();ctx.rotate((arm/6)*Math.PI*2);
+    const agd=ctx.createLinearGradient(0,0,R*1.1,0);
+    agd.addColorStop(0,`rgba(${r1},${g1},${b1},0)`);
+    agd.addColorStop(0.2,`rgba(${r1},${g1},${b1},0.14)`);
+    agd.addColorStop(0.6,`rgba(${r3},${g3},${b3},0.06)`);
+    agd.addColorStop(1,'rgba(0,0,0,0)');
+    const ry=Math.max(0.5,R*0.045);
+    ctx.beginPath();ctx.ellipse(R*0.4,0,R*0.65,ry,0,0,Math.PI*2);
+    ctx.fillStyle=agd;ctx.fill();ctx.restore();
+  }
+  ctx.restore();
+
+  // ==============================
+  // ★リング＋サーフボード（一体で回転）
+  // リングと同じ角度でサーフボードが乗って動く
+  // ==============================
+  RING_DEFS.forEach((rd, idx)=>{
+    const lr = R * rd.ratio;
+    if(lr < 2) return;
+
+    // ★このリングの現在角度
+    const ang = ringAngles[idx];
+    const n = rd.n;
+    const segAng = (Math.PI*2) / n;
+    const drawAng = segAng * 0.72; // 弧の長さ
+
+    // 薄い軌道円
+    ctx.beginPath();ctx.arc(0,0,lr,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(${r1},${g1},${b1},0.07)`;
+    ctx.lineWidth=0.3;ctx.stroke();
+
+    for(let s=0; s<n; s++){
+      const a0 = ang + s * segAng;
+      const a1 = a0 + drawAng;
+      const amid = a0 + drawAng * 0.5; // 弧の中間
+
+      // 弧（リング）
+      ctx.beginPath();ctx.arc(0,0,lr,a0,a1);
+      ctx.strokeStyle=`rgba(${r1},${g1},${b1},${rd.al+bp*0.07})`;
+      ctx.lineWidth=rd.lw;ctx.stroke();
+
+      // ★サーフボードを弧の中間点に配置・接線方向に向ける
+      const sx = Math.cos(amid) * lr;
+      const sy = Math.sin(amid) * lr;
+      const tangent = amid + Math.PI/2; // 接線方向
+
+      const sw = lr * 0.055 * (0.85+bp*0.2); // 幅（リング半径に比例）
+      const sh = lr * 0.14 * (0.85+bp*0.2);  // 高さ
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(tangent);
+
+      // グラデーション
+      const gd = ctx.createLinearGradient(0,-sh,0,sh);
+      gd.addColorStop(0,   `rgba(${r1},${g1},${b1},0)`);
+      gd.addColorStop(0.15,`rgba(255,255,200,${rd.al*1.4+bp*0.15})`);
+      gd.addColorStop(0.5, `rgba(${r1},${g1},${b1},${rd.al*1.1+bp*0.1})`);
+      gd.addColorStop(0.85,`rgba(255,255,200,${rd.al*1.4+bp*0.15})`);
+      gd.addColorStop(1,   `rgba(${r1},${g1},${b1},0)`);
+
+      // サーフボード形（尖った楕円）
+      ctx.beginPath();
+      ctx.moveTo(0,-sh);
+      ctx.bezierCurveTo( sw,-sh*0.25,  sw, sh*0.25, 0, sh);
+      ctx.bezierCurveTo(-sw, sh*0.25, -sw,-sh*0.25, 0,-sh);
+      ctx.closePath();
+      ctx.fillStyle=gd;ctx.fill();
+      ctx.strokeStyle=`rgba(${r1},${g1},${b1},${rd.al*0.7})`;
+      ctx.lineWidth=0.4;ctx.stroke();
+
+      ctx.restore();
+    }
+  });
+
+  // ==============================
+  // 花びら3層
+  // ==============================
+  // 外層16枚（時計）
+  ctx.save();ctx.rotate(t*0.015*rotBoost);
+  for(let i=0;i<16;i++){
+    ctx.save();ctx.rotate((i/16)*Math.PI*2);
+    ctx.translate(0,-R*0.78);ctx.rotate(Math.PI);
+    drawPetal(R*0.13,R*0.2,
+      `rgba(${r3},${g3},${b3},${0.16+bp*0.07})`,
+      `rgba(${r1},${g1},${b1},${0.28+bp*0.08})`);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // 中層12枚（反時計）
+  ctx.save();ctx.rotate(-t*0.022*rotBoost+Math.PI/12);
+  for(let i=0;i<12;i++){
+    ctx.save();ctx.rotate((i/12)*Math.PI*2);
+    ctx.translate(0,-R*0.56);ctx.rotate(Math.PI);
+    drawPetal(R*0.11,R*0.18,
+      `rgba(${r2},${g2},${b2},${0.26+bp*0.09})`,
+      `rgba(${r1},${g1},${b1},${0.38+bp*0.09})`);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // 内層8枚（時計）
+  ctx.save();ctx.rotate(t*0.032*rotBoost+Math.PI/8);
+  for(let i=0;i<8;i++){
+    ctx.save();ctx.rotate((i/8)*Math.PI*2);
+    ctx.translate(0,-R*0.36);ctx.rotate(Math.PI);
+    drawPetal(R*0.09,R*0.15,
+      `rgba(${r1},${g1},${b1},${0.35+bp*0.1})`,
+      `rgba(255,255,255,${0.38+bp*0.09})`);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // ヤントラ（六芒星）
+  ctx.save();ctx.rotate(-t*0.035*rotBoost);
+  for(let tri=0;tri<2;tri++){
+    ctx.save();ctx.rotate(tri*Math.PI/3);
+    const gr=R*0.44; if(gr>0.5){
+      ctx.beginPath();
+      for(let i=0;i<3;i++){
+        const a=(i/3)*Math.PI*2-Math.PI/2;
+        i===0?ctx.moveTo(Math.cos(a)*gr,Math.sin(a)*gr):ctx.lineTo(Math.cos(a)*gr,Math.sin(a)*gr);
+      }
+      ctx.closePath();
+      ctx.strokeStyle=`rgba(${r1},${g1},${b1},${0.5+bp*0.12})`;
+      ctx.lineWidth=1.0;ctx.stroke();
+      ctx.fillStyle=`rgba(${r1},${g1},${b1},0.025)`;ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+
+  ctx.save();ctx.rotate(t*0.05*rotBoost);
+  for(let tri=0;tri<2;tri++){
+    ctx.save();ctx.rotate(tri*Math.PI/3+Math.PI/6);
+    const gr=R*0.27; if(gr>0.3){
+      ctx.beginPath();
+      for(let i=0;i<3;i++){
+        const a=(i/3)*Math.PI*2-Math.PI/2;
+        i===0?ctx.moveTo(Math.cos(a)*gr,Math.sin(a)*gr):ctx.lineTo(Math.cos(a)*gr,Math.sin(a)*gr);
+      }
+      ctx.closePath();
+      ctx.strokeStyle=`rgba(${r1},${g1},${b1},${0.45+bp*0.12})`;
+      ctx.lineWidth=0.8;ctx.stroke();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // 放射スポーク
+  ctx.save();ctx.rotate(t*0.018*rotBoost);
+  for(let i=0;i<36;i++){
+    const a=(i/36)*Math.PI*2;
+    const inner=R*0.06, outer=R*0.48;
+    if(outer<1)continue;
+    const gd=ctx.createLinearGradient(
+      Math.cos(a)*inner,Math.sin(a)*inner,
+      Math.cos(a)*outer,Math.sin(a)*outer);
+    gd.addColorStop(0,`rgba(${r1},${g1},${b1},${0.35+bp*0.08})`);
+    gd.addColorStop(0.7,`rgba(${r1},${g1},${b1},0.06)`);
+    gd.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a)*inner,Math.sin(a)*inner);
+    ctx.lineTo(Math.cos(a)*outer,Math.sin(a)*outer);
+    ctx.strokeStyle=gd;ctx.lineWidth=i%6===0?0.9:0.35;ctx.stroke();
+  }
+  ctx.restore();
+
+  // 梵字（外周リング上を移動・真上の文字が光る）
+  ctx.restore();
+  if(scale>0.2){
+    const bonjiR=maxR*1.1;
+    const bsz=Math.max(9,Math.min(14,bonjiR*0.085));
+    const opacity=Math.min(1,(scale-0.2)/0.3);
+    ctx.font=`${bsz}px serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    const total=BONJI.length;
+
+    // 文字列全体が回転する角度（bonjiPosで1周）
+    const offsetAng = bonjiPos * Math.PI * 2;
+
+    BONJI.forEach((ch, i)=>{
+      // 各文字の現在位置
+      const ang = (i/total)*Math.PI*2 + offsetAng;
+      const bx = cx + Math.cos(ang)*bonjiR;
+      const by = cy + Math.sin(ang)*bonjiR;
+
+      // 真上（-π/2）との角度差で輝度を決定
+      let diff = ang % (Math.PI*2);
+      if(diff < 0) diff += Math.PI*2;
+      const top = Math.PI*1.5; // 真上=270度
+      let d = Math.abs(diff - top);
+      if(d > Math.PI) d = Math.PI*2 - d;
+
+      // dが小さいほど（真上に近いほど）明るく
+      const segSize = (Math.PI*2)/total;
+      const glow = Math.max(0, 1 - d/segSize);
+
+      let charAl, col;
+      if(glow > 0.5){
+        charAl = opacity*(0.4 + glow*0.6);
+        col = `rgba(255,245,80,${charAl})`;
+      } else if(glow > 0.0){
+        charAl = opacity*(0.1 + glow*0.5);
+        col = `rgba(${r1},${g1},${b1},${charAl})`;
+      } else {
+        charAl = opacity*0.13;
+        col = `rgba(${r3},${g3},${b3},${charAl})`;
+      }
+
+      ctx.save();
+      ctx.shadowBlur = glow > 0.5 ? glow*20 : 0;
+      ctx.shadowColor = 'rgba(255,245,80,1)';
+      ctx.fillStyle = col;
+      ctx.fillText(ch, bx, by);
+      ctx.restore();
+    });
+    ctx.shadowBlur = 0;
+  }
+
+  // 中心コア
+  ctx.save();ctx.translate(cx,cy);
+  const coreR=Math.max(4,R*0.17);
+  const cgd=ctx.createRadialGradient(0,0,0,0,0,coreR);
+  cgd.addColorStop(0,'rgba(255,255,255,1)');
+  cgd.addColorStop(0.1,`rgba(255,255,220,0.9)`);
+  cgd.addColorStop(0.25,`rgba(${r1},${g1},${b1},${0.7+bp*0.2})`);
+  cgd.addColorStop(0.55,`rgba(${r3},${g3},${b3},0.25)`);
+  cgd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath();ctx.arc(0,0,coreR,0,Math.PI*2);
+  ctx.fillStyle=cgd;ctx.fill();
+  const igR=Math.max(2,R*0.05);
+  const igd=ctx.createRadialGradient(0,0,0,0,0,igR);
+  igd.addColorStop(0,'rgba(255,255,255,1)');
+  igd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath();ctx.arc(0,0,igR,0,Math.PI*2);
+  ctx.fillStyle=igd;ctx.fill();
+  ctx.restore();
+}
+
+// ★毎フレームリング角度を更新
+function updateRings(){
+  RING_DEFS.forEach((rd, idx)=>{
+    const dir = (idx%2===0) ? 1 : -1;
+    ringAngles[idx] += rd.spd * dir * rotBoost;
+  });
+  // 梵字：0〜1の小数で管理（絶対に範囲外にならない）
+  bonjiPos += 0.018 / BONJI.length; // 1周=1.0
+  if(bonjiPos >= 1.0) bonjiPos -= 1.0;
+}
+
+// 呼吸
+const breathEl=document.getElementById('breath');
+function updateBreath(){
+  const sp=SP[speed];
+  const order=['i','h1','e','h2'];
+  const lens={i:sp.i,h1:sp.h1,e:sp.e,h2:sp.h2};
+  pf++;
+  if(pf>=lens[phase]){pf=0;phase=order[(order.indexOf(phase)+1)%4];}
+  const len=lens[phase];
+  if(phase==='i') bp=len>0?pf/len:1;
+  else if(phase==='h1') bp=1;
+  else if(phase==='e') bp=len>0?1-pf/len:0;
+  else bp=0;
+  bp=Math.max(0,Math.min(1,bp));
+  breathEl.textContent=PTXT[phase];
+  breathEl.style.color=PCOL[phase];
+}
+
+function updateMic(){
+  if(!analyser||!micData){rotBoost=Math.max(1,rotBoost*0.97);return;}
+  analyser.getByteFrequencyData(micData);
+  const avg=micData.reduce((a,v)=>a+v,0)/micData.length;
+  micVolume=avg/128;
+  rotBoost=rotBoost*0.78+(1+micVolume*9)*0.22;
+  document.getElementById('vol-fill').style.height=Math.min(100,micVolume*55)+'%';
+}
+
+async function toggleMic(){
+  const btn=document.getElementById('btn-mic');
+  if(micActive){
+    if(micStream)micStream.getTracks().forEach(tr=>tr.stop());
+    micStream=null;analyser=null;micData=null;
+    micActive=false;micVolume=0;rotBoost=1;
+    btn.textContent='🎤 Voice';btn.classList.remove('active');
+    document.getElementById('vol-wrap').style.display='none';
+    document.getElementById('vol-fill').style.height='0%';
+    return;
+  }
+  try{
+    if(!aCtx)aCtx=new(window.AudioContext||window.webkitAudioContext)();
+    if(aCtx.state==='suspended')await aCtx.resume();
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false},video:false});
+    const src=aCtx.createMediaStreamSource(micStream);
+    analyser=aCtx.createAnalyser();
+    analyser.fftSize=1024;analyser.smoothingTimeConstant=0.65;
+    micData=new Uint8Array(analyser.frequencyBinCount);
+    src.connect(analyser);
+    micActive=true;
+    btn.textContent='🎤 ON';btn.classList.add('active');
+    document.getElementById('vol-wrap').style.display='flex';
+  }catch(e){
+    btn.textContent='⚠ Allow Mic';
+    setTimeout(()=>{btn.textContent='🎤 Voice';btn.classList.remove('active');},2500);
+  }
+}
+
+function setHz(h){
+  hz=h;
+  [174,285,396,417,528,639,741,852,963].forEach(x=>{
+    const b=document.getElementById('b'+x);
+    if(b) b.classList.remove('active');
+  });
+  const btn=document.getElementById('b'+h);
+  if(btn) btn.classList.add('active');
+  // ★説明テキストを確実に更新
+  const desc=document.getElementById('hz-desc');
+  const descText=HZ_DESC[String(h)]||'';
+  if(desc){ desc.textContent=h+'Hz｜'+descText; }
+  if(soundOn){stopSound();startSound();}
+}
+function initAudio(){
+  if(!aCtx)try{aCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
+  if(aCtx&&aCtx.state==='suspended')aCtx.resume();
+}
+function startSound(){
+  if(!aCtx)return;
+  [[hz,0.07],[hz*1.5,0.025],[hz*0.5,0.025]].forEach(([f,v])=>{
+    try{
+      const o=aCtx.createOscillator(),g=aCtx.createGain();
+      o.type='sine';o.frequency.value=f;g.gain.value=v;
+      o.connect(g);g.connect(aCtx.destination);o.start();
+      oscs.push({o,g});
+    }catch(e){}
+  });
+}
+function stopSound(){
+  oscs.forEach(({o,g})=>{try{g.gain.setTargetAtTime(0,aCtx.currentTime,0.3);setTimeout(()=>{try{o.stop();}catch(e){}},500);}catch(e){}});
+  oscs=[];
+}
+function toggleSound(){
+  initAudio();soundOn=!soundOn;
+  const btn=document.getElementById('bsound');
+  if(soundOn){startSound();btn.textContent='🔕 Sound';btn.classList.add('active');}
+  else{stopSound();btn.textContent='🔔 Sound';btn.classList.remove('active');}
+}
+function toggleStop(){
+  stopped=!stopped;
+  const btn=document.getElementById('btn-stop');
+  if(stopped){
+    btn.textContent='▶ Play';btn.classList.add('active');
+    if(animId){cancelAnimationFrame(animId);animId=null;}
+  }else{
+    btn.textContent='⏹ Stop';btn.classList.remove('active');
+    loop();
+  }
+}
+
+function loop(){
+  t+=0.009;
+  updateBreath();
+  updateRings(); // ★毎フレーム角度更新
+  updateMic();
+  draw();
+  animId=requestAnimationFrame(loop);
+}
+
+window.addEventListener('resize',resize);
+resize();
+loop();
+</script>
+</body>
+</html>

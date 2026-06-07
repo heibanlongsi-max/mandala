@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>宇宙マンダラ v9 - NeuroCosmosの調律</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; width:100vw; height:100vh; font-family:serif; }
+canvas { position:fixed; top:0; left:0; }
+
+#top-info {
+  position:fixed; top:10px; left:50%;
+  transform:translateX(-50%);
+  z-index:10; text-align:center;
+  pointer-events:none;
+}
+#hz-name {
+  font-size:15px; letter-spacing:4px;
+  color:rgba(255,220,80,0.9);
+  text-shadow:0 0 15px rgba(255,220,80,0.7);
+}
+#hz-desc-v9 {
+  font-size:13px; letter-spacing:2px;
+  color:rgba(255,255,255,0.7);
+  margin-top:4px;
+}
+#breath-v9 {
+  position:fixed; top:58px; left:50%;
+  transform:translateX(-50%);
+  z-index:10; font-size:clamp(22px,6vw,42px);
+  font-weight:bold; letter-spacing:8px;
+  pointer-events:none; white-space:nowrap;
+  text-shadow:0 0 25px currentColor, 0 0 50px currentColor;
+}
+#vol-wrap {
+  position:fixed; left:10px; top:50%;
+  transform:translateY(-50%);
+  z-index:10; display:none;
+  flex-direction:column; align-items:center; gap:4px;
+}
+#vol-label { font-size:9px; color:rgba(255,215,0,0.4); letter-spacing:1px; }
+#vol-bar {
+  width:8px; height:120px;
+  background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,215,0,0.15);
+  border-radius:4px; overflow:hidden; position:relative;
+}
+#vol-fill {
+  position:absolute; bottom:0; left:0; right:0;
+  background:linear-gradient(to top,#ff2020,#ffaa00,#ffd700);
+  border-radius:4px; height:0%; transition:height 0.04s;
+}
+#ui {
+  position:fixed; bottom:6px; left:50%;
+  transform:translateX(-50%);
+  z-index:10; display:flex; flex-wrap:wrap;
+  gap:4px; justify-content:center; width:98vw;
+}
+button {
+  background:rgba(80,40,0,0.3);
+  border:1px solid rgba(255,200,50,0.35);
+  color:rgba(255,200,50,0.8);
+  padding:4px 8px; border-radius:12px;
+  cursor:pointer; font-size:10px; letter-spacing:1px;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation; font-family:serif;
+}
+button.active {
+  background:rgba(180,100,0,0.6);
+  border-color:rgba(255,220,80,0.9);
+  color:#ffd700;
+  box-shadow:0 0 8px rgba(255,200,0,0.4);
+}
+#btn-stop { border-color:rgba(255,80,80,0.4); color:rgba(255,120,120,0.8); }
+#btn-stop.active { background:rgba(150,20,20,0.6); }
+#btn-mic { border-color:rgba(80,255,120,0.4); color:rgba(120,255,150,0.8); }
+#btn-mic.active { background:rgba(20,130,40,0.6); border-color:rgba(80,255,120,0.8); color:#80ff80; }
+#btn-auto { border-color:rgba(180,100,255,0.5); color:rgba(200,150,255,0.9); }
+#btn-auto.active { background:rgba(100,30,180,0.6); border-color:rgba(200,100,255,0.9); color:#e0a0ff; }
+
+/* タイマー表示 */
+#timer-display {
+  position:fixed; right:12px; top:12px;
+  z-index:10; text-align:right;
+  pointer-events:none;
+}
+#timer-clock {
+  font-size:22px; font-weight:bold;
+  color:rgba(255,215,0,0.85);
+  letter-spacing:2px;
+  text-shadow:0 0 12px rgba(255,215,0,0.6);
+  font-family:monospace;
+}
+#timer-label {
+  font-size:9px; letter-spacing:2px;
+  color:rgba(255,255,255,0.35);
+}
+
+/* Auto周波数プログレス */
+#auto-progress {
+  position:fixed; bottom:68px; left:50%;
+  transform:translateX(-50%);
+  z-index:10; width:180px; height:3px;
+  background:rgba(255,255,255,0.08);
+  border-radius:2px; display:none;
+}
+#auto-bar {
+  height:100%; border-radius:2px;
+  background:linear-gradient(to right,#8844ff,#ff44aa);
+  width:0%; transition:width 0.1s;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="top-info">
+  <div id="hz-name">528 Hz</div>
+  <div id="hz-desc-v9">愛・変容・DNA修復</div>
+</div>
+<div id="breath-v9">Inhale</div>
+<div id="timer-display">
+  <div id="timer-clock">10:00</div>
+  <div id="timer-label">TIMER</div>
+</div>
+<div id="vol-wrap">
+  <div id="vol-label">VOL</div>
+  <div id="vol-bar"><div id="vol-fill"></div></div>
+</div>
+<div id="auto-progress"><div id="auto-bar"></div></div>
+<div id="ui">
+  <button id="b174" onclick="setHz(174)">174</button>
+  <button id="b285" onclick="setHz(285)">285</button>
+  <button id="b396" onclick="setHz(396)">396</button>
+  <button id="b417" onclick="setHz(417)">417</button>
+  <button id="b528" class="active" onclick="setHz(528)">528</button>
+  <button id="b639" onclick="setHz(639)">639</button>
+  <button id="b741" onclick="setHz(741)">741</button>
+  <button id="b852" onclick="setHz(852)">852</button>
+  <button id="b963" onclick="setHz(963)">963</button>
+  <button id="bsound" onclick="toggleSound()">🔔</button>
+  <button id="spd1" class="active" onclick="setSpeed(1)">遅</button>
+  <button id="spd2" onclick="setSpeed(2)">中</button>
+  <button id="spd3" onclick="setSpeed(3)">速</button>
+  <button id="btn-auto" onclick="toggleAuto()">🔄Auto</button>
+  <button id="btn-timer" onclick="toggleTimer()">⏱10分</button>
+  <button id="btn-mic" onclick="toggleMic()">🎤</button>
+  <button id="btn-stop" onclick="toggleStop()">⏹</button>
+</div>
+<script>
+const cv=document.getElementById('c');
+const ctx=cv.getContext('2d');
+let W,H,cx,cy;
+
+// 悉曇梵字31文字
+const BONJI=['अ','आ','इ','ई','उ','ऊ','ए','ऐ','ओ','औ','अं','अः','क','ख','ग','घ','ङ','च','छ','ज','झ','ञ','ट','ड','ण','त','द','न','प','ब','म'];
+
+// 状態変数
+let t=0, bp=0, hz=528;
+let soundOn=false, aCtx=null, oscs=[];
+let stars=[], particles=[];
+let micActive=false, micStream=null, analyser=null, micData=null;
+let micVolume=0, rotBoost=1;
+let stopped=false, animId=null;
+let bonjiPos=0; // 0〜1で1周
+
+// リング角度（7層、独立回転）
+const RINGS=[
+  {r:0.93,n:24,lw:1.6,al:0.5,spd:0.0035,dir:1},
+  {r:0.80,n:20,lw:1.2,al:0.4,spd:0.0050,dir:-1},
+  {r:0.67,n:16,lw:1.5,al:0.48,spd:0.0042,dir:1},
+  {r:0.54,n:14,lw:1.2,al:0.42,spd:0.0058,dir:-1},
+  {r:0.41,n:12,lw:1.4,al:0.46,spd:0.0048,dir:1},
+  {r:0.29,n:10,lw:1.1,al:0.42,spd:0.0065,dir:-1},
+  {r:0.17,n:6, lw:1.3,al:0.50,spd:0.0055,dir:1},
+];
+let ringA=RINGS.map(()=>0);
+
+// 呼吸パターン
+const SP={
+  1:{i:240,h1:180,e:480,h2:180},
+  2:{i:180,h1:180,e:360,h2:180},
+  3:{i:120,h1:180,e:240,h2:180},
+};
+let speed=1,phase='i',pf=0;
+const PCOL={i:'#FF8C00',h1:'#FFD700',e:'#5599FF',h2:'#FFD700'};
+const PTXT={i:'Inhale',h1:'Hold',e:'Exhale',h2:'Hold'};
+
+// 周波数パレット（大幅に変化する色）
+const PAL={
+  174:{a:[120,80,255],b:[60,20,200],c:[200,160,255],name:'174 Hz',desc:'安定・痛みの軽減'},
+  285:{a:[0,220,160],b:[0,140,100],c:[80,255,200],name:'285 Hz',desc:'修復・自然治癒'},
+  396:{a:[200,40,255],b:[130,0,200],c:[240,120,255],name:'396 Hz',desc:'不安からの解放'},
+  417:{a:[255,60,60],b:[200,20,20],c:[255,160,80],name:'417 Hz',desc:'ネガティブの変化'},
+  528:{a:[255,210,0],b:[255,110,0],c:[255,180,100],name:'528 Hz',desc:'愛・変容・DNA修復'},
+  639:{a:[0,200,255],b:[0,80,200],c:[100,230,255],name:'639 Hz',desc:'人間関係の調和'},
+  741:{a:[0,255,80],b:[0,160,40],c:[100,255,160],name:'741 Hz',desc:'浄化・直感'},
+  852:{a:[255,140,0],b:[200,70,0],c:[255,210,80],name:'852 Hz',desc:'直感・覚醒'},
+  963:{a:[240,240,255],b:[160,160,255],c:[220,200,255],name:'963 Hz',desc:'高次元とのつながり'},
+};
+
+function setSpeed(s){
+  speed=s;
+  [1,2,3].forEach(x=>document.getElementById('spd'+x).classList.remove('active'));
+  document.getElementById('spd'+s).classList.add('active');
+  phase='i';pf=0;
+}
+
+function initStars(){
+  stars=Array.from({length:350},()=>({
+    x:Math.random()*W,y:Math.random()*H,
+    r:Math.random()*1.8+0.2,
+    a:Math.random()*Math.PI*2,
+    sp:Math.random()*0.006+0.001,
+    c:Math.random()<0.25?[255,215,0]:Math.random()<0.35?[160,100,255]:[255,255,255]
+  }));
+  particles=Array.from({length:120},()=>({
+    angle:Math.random()*Math.PI*2,
+    orbit:0.15+Math.random()*0.85,
+    speed:(Math.random()*0.004+0.001)*(Math.random()<0.5?1:-1),
+    r:Math.random()*1.8+0.4,
+    phase:Math.random()*Math.PI*2
+  }));
+}
+function resize(){
+  W=cv.width=window.innerWidth;
+  H=cv.height=window.innerHeight;
+  cx=W/2;cy=H/2;initStars();
+}
+
+function getP(){ return PAL[hz]||PAL[528]; }
+
+// 花びら（蓮型）
+function petal(r1,r2,fill,stroke){
+  ctx.beginPath();
+  ctx.moveTo(0,-r2);
+  ctx.bezierCurveTo(r1*0.55,-r2*0.35,r1*0.55,r2*0.35,0,r2);
+  ctx.bezierCurveTo(-r1*0.55,r2*0.35,-r1*0.55,-r2*0.35,0,-r2);
+  ctx.closePath();
+  if(fill){ctx.fillStyle=fill;ctx.fill();}
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=0.6;ctx.stroke();}
+}
+
+function draw(){
+  ctx.fillStyle='rgba(0,0,6,0.14)';
+  ctx.fillRect(0,0,W,H);
+
+  const P=getP();
+  const [r1,g1,b1]=P.a;
+  const [r2,g2,b2]=P.b;
+  const [r3,g3,b3]=P.c;
+
+  // ---- 星 ----
+  stars.forEach(s=>{
+    s.a+=s.sp;
+    const al=(Math.sin(s.a)+1)/2*0.8+0.1;
+    ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${s.c[0]},${s.c[1]},${s.c[2]},${al})`;
+    ctx.fill();
+  });
+
+  const scale=0.015+bp*0.985;
+  const maxR=Math.min(W,H)*0.40;
+  const R=maxR*scale;
+
+  ctx.save();
+  ctx.translate(cx,cy);
+
+  // ---- 外側オーラ（宇宙雲） ----
+  for(let i=4;i>=0;i--){
+    const or=R*(1.5+i*0.4);if(or<2)continue;
+    const gd=ctx.createRadialGradient(0,0,R*0.2,0,0,or);
+    gd.addColorStop(0,'rgba(0,0,0,0)');
+    gd.addColorStop(0.4,`rgba(${r1},${Math.floor(g1/2)},${Math.floor(b1/3)},${0.055-i*0.009})`);
+    gd.addColorStop(0.75,`rgba(${r2},${g2},${b2},${0.03-i*0.005})`);
+    gd.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath();ctx.arc(0,0,or,0,Math.PI*2);
+    ctx.fillStyle=gd;ctx.fill();
+  }
+
+  // ---- 銀河アーム8本 ----
+  ctx.save();ctx.rotate(t*0.025*rotBoost);
+  for(let arm=0;arm<8;arm++){
+    ctx.save();ctx.rotate((arm/8)*Math.PI*2);
+    const agd=ctx.createLinearGradient(0,0,R*1.15,0);
+    agd.addColorStop(0,`rgba(${r1},${g1},${b1},0)`);
+    agd.addColorStop(0.18,`rgba(${r1},${g1},${b1},0.2)`);
+    agd.addColorStop(0.55,`rgba(${r2},${g2},${b2},0.09)`);
+    agd.addColorStop(1,'rgba(0,0,0,0)');
+    const ry=Math.max(0.3,R*0.042);
+    ctx.beginPath();ctx.ellipse(R*0.42,0,R*0.7,ry,0,0,Math.PI*2);
+    ctx.fillStyle=agd;ctx.fill();ctx.restore();
+  }
+  ctx.restore();
+
+  // ---- リング＋サーフボード（7層・互い違い回転） ----
+  RINGS.forEach((rd,idx)=>{
+    const lr=R*rd.r;if(lr<1.5)return;
+    const ang=ringA[idx];
+    const n=rd.n;
+    const seg=(Math.PI*2)/n;
+    const draw=seg*0.70;
+
+    // 薄い軌道円
+    ctx.beginPath();ctx.arc(0,0,lr,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(${r1},${g1},${b1},0.06)`;
+    ctx.lineWidth=0.3;ctx.stroke();
+
+    for(let s=0;s<n;s++){
+      const a0=ang+s*seg;
+      const a1=a0+draw;
+      const amid=a0+draw*0.5;
+
+      // 弧
+      ctx.beginPath();ctx.arc(0,0,lr,a0,a1);
+      ctx.strokeStyle=`rgba(${r1},${g1},${b1},${rd.al+bp*0.07})`;
+      ctx.lineWidth=rd.lw;ctx.stroke();
+
+      // サーフボード（弧と一体で移動）
+      const sx=Math.cos(amid)*lr, sy=Math.sin(amid)*lr;
+      const sw=lr*0.048*(0.8+bp*0.25);
+      const sh=lr*0.12*(0.8+bp*0.25);
+      ctx.save();
+      ctx.translate(sx,sy);
+      ctx.rotate(amid+Math.PI/2);
+      const sgd=ctx.createLinearGradient(0,-sh,0,sh);
+      sgd.addColorStop(0,`rgba(${r1},${g1},${b1},0)`);
+      sgd.addColorStop(0.2,`rgba(255,255,200,${rd.al*1.5+bp*0.18})`);
+      sgd.addColorStop(0.5,`rgba(${r1},${g1},${b1},${rd.al*1.1+bp*0.12})`);
+      sgd.addColorStop(0.8,`rgba(255,255,200,${rd.al*1.5+bp*0.18})`);
+      sgd.addColorStop(1,`rgba(${r1},${g1},${b1},0)`);
+      ctx.beginPath();
+      ctx.moveTo(0,-sh);
+      ctx.bezierCurveTo(sw,-sh*0.22,sw,sh*0.22,0,sh);
+      ctx.bezierCurveTo(-sw,sh*0.22,-sw,-sh*0.22,0,-sh);
+      ctx.closePath();
+      ctx.fillStyle=sgd;ctx.fill();
+      ctx.restore();
+    }
+  });
+
+  // ---- 蓮の花びら3層 ----
+  // 外（16枚）時計
+  ctx.save();ctx.rotate(t*0.012*rotBoost);
+  for(let i=0;i<16;i++){
+    ctx.save();ctx.rotate((i/16)*Math.PI*2);
+    ctx.translate(0,-R*0.76);ctx.rotate(Math.PI);
+    petal(R*0.12,R*0.19,
+      `rgba(${r2},${g2},${b2},${0.18+bp*0.08})`,
+      `rgba(${r1},${g1},${b1},${0.32+bp*0.1})`);
+    ctx.restore();
+  }
+  ctx.restore();
+  // 中（12枚）反時計
+  ctx.save();ctx.rotate(-t*0.018*rotBoost+Math.PI/12);
+  for(let i=0;i<12;i++){
+    ctx.save();ctx.rotate((i/12)*Math.PI*2);
+    ctx.translate(0,-R*0.56);ctx.rotate(Math.PI);
+    petal(R*0.10,R*0.17,
+      `rgba(${r1},${g1},${b1},${0.28+bp*0.09})`,
+      `rgba(255,255,180,${0.35+bp*0.1})`);
+    ctx.restore();
+  }
+  ctx.restore();
+  // 内（8枚）時計
+  ctx.save();ctx.rotate(t*0.025*rotBoost+Math.PI/8);
+  for(let i=0;i<8;i++){
+    ctx.save();ctx.rotate((i/8)*Math.PI*2);
+    ctx.translate(0,-R*0.37);ctx.rotate(Math.PI);
+    petal(R*0.085,R*0.14,
+      `rgba(${r3},${g3},${b3},${0.35+bp*0.1})`,
+      `rgba(255,255,200,${0.4+bp*0.1})`);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // ---- ヤントラ（六芒星+四角） ----
+  // 外六芒星・反時計
+  ctx.save();ctx.rotate(-t*0.03*rotBoost);
+  for(let tri=0;tri<2;tri++){
+    ctx.save();ctx.rotate(tri*Math.PI/3);
+    const gr=R*0.46;if(gr>0.5){
+      ctx.beginPath();
+      for(let i=0;i<3;i++){const a=(i/3)*Math.PI*2-Math.PI/2;i===0?ctx.moveTo(Math.cos(a)*gr,Math.sin(a)*gr):ctx.lineTo(Math.cos(a)*gr,Math.sin(a)*gr);}
+      ctx.closePath();
+      ctx.strokeStyle=`rgba(${r1},${g1},${b1},${0.55+bp*0.12})`;ctx.lineWidth=1.1;ctx.stroke();
+      ctx.fillStyle=`rgba(${r1},${g1},${b1},0.025)`;ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+  // 内六芒星・時計
+  ctx.save();ctx.rotate(t*0.042*rotBoost);
+  for(let tri=0;tri<2;tri++){
+    ctx.save();ctx.rotate(tri*Math.PI/3+Math.PI/6);
+    const gr=R*0.28;if(gr>0.3){
+      ctx.beginPath();
+      for(let i=0;i<3;i++){const a=(i/3)*Math.PI*2-Math.PI/2;i===0?ctx.moveTo(Math.cos(a)*gr,Math.sin(a)*gr):ctx.lineTo(Math.cos(a)*gr,Math.sin(a)*gr);}
+      ctx.closePath();
+      ctx.strokeStyle=`rgba(${r1},${g1},${b1},${0.48+bp*0.12})`;ctx.lineWidth=0.8;ctx.stroke();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+  // 四角・反時計
+  ctx.save();ctx.rotate(-t*0.055*rotBoost+Math.PI/4);
+  const sq=R*0.34;if(sq>0.3){
+    ctx.strokeStyle=`rgba(${r3},${g3},${b3},${0.38+bp*0.1})`;
+    ctx.lineWidth=0.7;ctx.beginPath();ctx.rect(-sq,-sq,sq*2,sq*2);ctx.stroke();
+  }
+  ctx.restore();
+
+  // ---- 放射スポーク48本 ----
+  ctx.save();ctx.rotate(t*0.015*rotBoost);
+  for(let i=0;i<48;i++){
+    const a=(i/48)*Math.PI*2;
+    const inner=R*0.05,outer=R*(0.44+Math.sin(t*0.8+i*0.3)*0.04);
+    if(outer<1)continue;
+    const gd=ctx.createLinearGradient(Math.cos(a)*inner,Math.sin(a)*inner,Math.cos(a)*outer,Math.sin(a)*outer);
+    gd.addColorStop(0,`rgba(${r1},${g1},${b1},${0.4+bp*0.08})`);
+    gd.addColorStop(0.6,`rgba(${r1},${g1},${b1},0.07)`);
+    gd.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath();ctx.moveTo(Math.cos(a)*inner,Math.sin(a)*inner);ctx.lineTo(Math.cos(a)*outer,Math.sin(a)*outer);
+    ctx.strokeStyle=gd;ctx.lineWidth=i%8===0?0.9:0.35;ctx.stroke();
+  }
+  ctx.restore();
+
+  // ---- 軌道粒子 ----
+  particles.forEach(p=>{
+    p.angle+=p.speed*rotBoost;
+    p.phase+=0.02;
+    const pr=R*p.orbit+Math.sin(p.phase)*3*scale;
+    if(pr<0.3)return;
+    const px=Math.cos(p.angle)*pr,py=Math.sin(p.angle)*pr;
+    const al=0.3+Math.sin(p.phase)*0.25+bp*0.2;
+    const sz=Math.max(0.3,p.r*scale);
+    ctx.beginPath();ctx.arc(px,py,sz,0,Math.PI*2);
+    ctx.fillStyle=`rgba(${r1},${g1},${b1},${al})`;ctx.fill();
+  });
+
+  // ---- 梵字（外周を移動・真上で光る） ----
+  ctx.restore();
+  if(scale>0.18){
+    const bonjiR=maxR*1.12;
+    const bsz=Math.max(9,Math.min(15,bonjiR*0.088));
+    const opacity=Math.min(1,(scale-0.18)/0.28);
+    ctx.font=`${bsz}px serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    const total=BONJI.length;
+    // 文字列全体がリングを一周する
+    const offsetAng=bonjiPos*Math.PI*2;
+
+    BONJI.forEach((ch,i)=>{
+      const ang=(i/total)*Math.PI*2+offsetAng;
+      const bx=cx+Math.cos(ang)*bonjiR;
+      const by=cy+Math.sin(ang)*bonjiR;
+
+      // 真上(270度=3π/2)との近さで輝度を決定
+      let a=ang%(Math.PI*2);
+      if(a<0)a+=Math.PI*2;
+      let d=Math.abs(a-Math.PI*1.5);
+      if(d>Math.PI)d=Math.PI*2-d;
+
+      const zone=(Math.PI*2)/total;
+      const bright=Math.max(0,1-d/zone);
+
+      ctx.save();
+      ctx.shadowBlur=bright*24;
+      ctx.shadowColor=`rgba(255,245,80,1)`;
+      if(bright>0.6){
+        ctx.fillStyle=`rgba(255,245,80,${opacity*(0.5+bright*0.5)})`;
+      } else if(bright>0.1){
+        ctx.fillStyle=`rgba(${r1},${g1},${b1},${opacity*(0.1+bright*0.5)})`;
+      } else {
+        ctx.fillStyle=`rgba(${r2},${g2},${b2},${opacity*0.13})`;
+      }
+      ctx.fillText(ch,bx,by);
+      ctx.restore();
+    });
+    ctx.shadowBlur=0;
+  }
+
+  // ---- 中心コア ----
+  ctx.save();ctx.translate(cx,cy);
+  const cR=Math.max(4,R*0.16);
+  const cgd=ctx.createRadialGradient(0,0,0,0,0,cR);
+  cgd.addColorStop(0,'rgba(255,255,255,1)');
+  cgd.addColorStop(0.08,`rgba(255,255,220,${0.92+bp*0.08})`);
+  cgd.addColorStop(0.22,`rgba(${r1},${g1},${b1},${0.72+bp*0.2})`);
+  cgd.addColorStop(0.5,`rgba(${r2},${g2},${b2},0.22)`);
+  cgd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath();ctx.arc(0,0,cR,0,Math.PI*2);ctx.fillStyle=cgd;ctx.fill();
+  const igR=Math.max(2,R*0.045);
+  const igd=ctx.createRadialGradient(0,0,0,0,0,igR);
+  igd.addColorStop(0,'rgba(255,255,255,1)');
+  igd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath();ctx.arc(0,0,igR,0,Math.PI*2);ctx.fillStyle=igd;ctx.fill();
+  ctx.restore();
+}
+
+// 呼吸更新
+const breathEl=document.getElementById('breath-v9');
+function updateBreath(){
+  const sp=SP[speed];
+  const order=['i','h1','e','h2'];
+  const lens={i:sp.i,h1:sp.h1,e:sp.e,h2:sp.h2};
+  pf++;
+  if(pf>=lens[phase]){pf=0;phase=order[(order.indexOf(phase)+1)%4];}
+  const len=lens[phase];
+  if(phase==='i') bp=len>0?pf/len:1;
+  else if(phase==='h1') bp=1;
+  else if(phase==='e') bp=len>0?1-pf/len:0;
+  else bp=0;
+  bp=Math.max(0,Math.min(1,bp));
+  breathEl.textContent=PTXT[phase];
+  breathEl.style.color=PCOL[phase];
+}
+
+function updateRings(){
+  // リング角度
+  RINGS.forEach((rd,idx)=>{
+    ringA[idx]+=rd.spd*rd.dir*rotBoost;
+  });
+  // 梵字：0〜1で1周（確実にループ）
+  bonjiPos=(bonjiPos+0.00045)%1.0;
+}
+
+function updateMic(){
+  if(!analyser||!micData){rotBoost=Math.max(1,rotBoost*0.97);return;}
+  analyser.getByteFrequencyData(micData);
+  const avg=micData.reduce((a,v)=>a+v,0)/micData.length;
+  micVolume=avg/128;
+  rotBoost=rotBoost*0.78+(1+micVolume*9)*0.22;
+  document.getElementById('vol-fill').style.height=Math.min(100,micVolume*55)+'%';
+}
+
+// 音：倍音+LFO揺らぎ
+function startSound(){
+  if(!aCtx)return;
+  const layers=[
+    {f:hz,      v:0.060,lfoHz:0.07,dep:hz*0.004},
+    {f:hz*1.5,  v:0.020,lfoHz:0.11,dep:hz*0.006},
+    {f:hz*0.5,  v:0.020,lfoHz:0.05,dep:hz*0.003},
+    {f:hz*2.0,  v:0.010,lfoHz:0.13,dep:hz*0.005},
+    {f:hz*1.25, v:0.009,lfoHz:0.09,dep:hz*0.004},
+    {f:hz*0.75, v:0.009,lfoHz:0.06,dep:hz*0.003},
+  ];
+  layers.forEach(({f,v,lfoHz,dep})=>{
+    try{
+      const o=aCtx.createOscillator(),g=aCtx.createGain();
+      const lfo=aCtx.createOscillator(),lg=aCtx.createGain();
+      lfo.type='sine';lfo.frequency.value=lfoHz;
+      lg.gain.value=dep;
+      lfo.connect(lg);lg.connect(o.frequency);lfo.start();
+      o.type='sine';o.frequency.value=f;
+      g.gain.setValueAtTime(0,aCtx.currentTime);
+      g.gain.linearRampToValueAtTime(v,aCtx.currentTime+2.5);
+      o.connect(g);g.connect(aCtx.destination);o.start();
+      oscs.push({o,g,lfo});
+    }catch(e){}
+  });
+}
+function stopSound(){
+  oscs.forEach(({o,g,lfo})=>{
+    try{g.gain.setTargetAtTime(0,aCtx.currentTime,0.5);setTimeout(()=>{try{o.stop();}catch(e){}try{lfo.stop();}catch(e){}},800);}catch(e){}
+  });
+  oscs=[];
+}
+
+function setHz(h){
+  hz=h;
+  Object.keys(PAL).forEach(x=>{const b=document.getElementById('b'+x);if(b)b.classList.remove('active');});
+  const btn=document.getElementById('b'+h);if(btn)btn.classList.add('active');
+  const P=PAL[h];
+  document.getElementById('hz-name').textContent=P.name;
+  document.getElementById('hz-desc-v9').textContent=P.desc;
+  if(soundOn){stopSound();startSound();}
+}
+
+// ==============================
+// ★Auto周波数切り替え
+// 174→285→396→417→528→639→741→852→963→852→...
+// ==============================
+const HZ_LIST=[174,285,396,417,528,639,741,852,963];
+let autoOn=false, autoIdx=0, autoDir=1;
+let autoFrames=0;
+const AUTO_INTERVAL=1800; // 約30秒/Hz（60fps×30）
+
+function toggleAuto(){
+  autoOn=!autoOn;
+  const btn=document.getElementById('btn-auto');
+  if(autoOn){
+    btn.textContent='🔄停止';btn.classList.add('active');
+    document.getElementById('auto-progress').style.display='block';
+    autoIdx=HZ_LIST.indexOf(hz);if(autoIdx<0)autoIdx=0;
+    autoFrames=0;
+    setHz(HZ_LIST[autoIdx]);
+  } else {
+    btn.textContent='🔄Auto';btn.classList.remove('active');
+    document.getElementById('auto-progress').style.display='none';
+  }
+}
+
+function updateAuto(){
+  if(!autoOn)return;
+  autoFrames++;
+  // プログレスバー更新
+  const pct=(autoFrames/AUTO_INTERVAL)*100;
+  document.getElementById('auto-bar').style.width=Math.min(100,pct)+'%';
+
+  if(autoFrames>=AUTO_INTERVAL){
+    autoFrames=0;
+    // 次のHz
+    autoIdx+=autoDir;
+    if(autoIdx>=HZ_LIST.length){autoIdx=HZ_LIST.length-2;autoDir=-1;}
+    if(autoIdx<0){autoIdx=1;autoDir=1;}
+    setHz(HZ_LIST[autoIdx]);
+  }
+}
+
+// ==============================
+// ★10分タイマー
+// ==============================
+let timerOn=false, timerSec=600; // 10分=600秒
+let timerInterval=null;
+
+function toggleTimer(){
+  const btn=document.getElementById('btn-timer');
+  if(timerOn){
+    // 停止・リセット
+    clearInterval(timerInterval);timerInterval=null;
+    timerOn=false;timerSec=600;
+    btn.textContent='⏱10分';btn.classList.remove('active');
+    document.getElementById('timer-clock').textContent='10:00';
+    document.getElementById('timer-clock').style.color='rgba(255,215,0,0.85)';
+  } else {
+    timerOn=true;timerSec=600;
+    btn.textContent='⏱停止';btn.classList.add('active');
+    updateTimerDisplay();
+    timerInterval=setInterval(()=>{
+      timerSec--;
+      updateTimerDisplay();
+      if(timerSec<=0){
+        clearInterval(timerInterval);timerInterval=null;
+        timerOn=false;
+        btn.textContent='⏱10分';btn.classList.remove('active');
+        document.getElementById('timer-clock').textContent='終了';
+        document.getElementById('timer-clock').style.color='rgba(255,100,100,0.9)';
+        // 音を止める
+        if(soundOn)toggleSound();
+      }
+    },1000);
+  }
+}
+
+function updateTimerDisplay(){
+  const m=Math.floor(timerSec/60);
+  const s=timerSec%60;
+  const col=timerSec<=60?'rgba(255,100,100,0.9)':timerSec<=180?'rgba(255,180,50,0.9)':'rgba(255,215,0,0.85)';
+  document.getElementById('timer-clock').textContent=
+    String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  document.getElementById('timer-clock').style.color=col;
+}
+function initAudio(){
+  if(!aCtx)try{aCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
+  if(aCtx&&aCtx.state==='suspended')aCtx.resume();
+}
+function toggleSound(){
+  initAudio();soundOn=!soundOn;
+  const btn=document.getElementById('bsound');
+  if(soundOn){startSound();btn.textContent='🔕';btn.classList.add('active');}
+  else{stopSound();btn.textContent='🔔';btn.classList.remove('active');}
+}
+async function toggleMic(){
+  const btn=document.getElementById('btn-mic');
+  if(micActive){
+    if(micStream)micStream.getTracks().forEach(tr=>tr.stop());
+    micStream=null;analyser=null;micData=null;
+    micActive=false;micVolume=0;rotBoost=1;
+    btn.textContent='🎤';btn.classList.remove('active');
+    document.getElementById('vol-wrap').style.display='none';
+    document.getElementById('vol-fill').style.height='0%';
+    return;
+  }
+  try{
+    if(!aCtx)aCtx=new(window.AudioContext||window.webkitAudioContext)();
+    if(aCtx.state==='suspended')await aCtx.resume();
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false},video:false});
+    const src=aCtx.createMediaStreamSource(micStream);
+    analyser=aCtx.createAnalyser();
+    analyser.fftSize=1024;analyser.smoothingTimeConstant=0.65;
+    micData=new Uint8Array(analyser.frequencyBinCount);
+    src.connect(analyser);
+    micActive=true;btn.textContent='🎤ON';btn.classList.add('active');
+    document.getElementById('vol-wrap').style.display='flex';
+  }catch(e){
+    btn.textContent='⚠許可';
+    setTimeout(()=>{btn.textContent='🎤';btn.classList.remove('active');},2500);
+  }
+}
+function toggleStop(){
+  stopped=!stopped;
+  const btn=document.getElementById('btn-stop');
+  if(stopped){btn.textContent='▶';btn.classList.add('active');if(animId){cancelAnimationFrame(animId);animId=null;}}
+  else{btn.textContent='⏹';btn.classList.remove('active');loop();}
+}
+
+function loop(){
+  t+=0.008;
+  updateBreath();updateRings();updateMic();updateAuto();draw();
+  animId=requestAnimationFrame(loop);
+}
+window.addEventListener('resize',resize);
+resize();loop();
+</script>
+</body>
+</html>
