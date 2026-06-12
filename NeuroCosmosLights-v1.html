@@ -50,10 +50,10 @@ button.active {
 #btn-stop.active { background:rgba(140,20,20,0.6); }
 #btn-auto { border-color:rgba(160,80,255,0.4); color:rgba(190,130,255,0.9); }
 #btn-auto.active { background:rgba(80,20,160,0.6); border-color:rgba(180,80,255,0.9); }
-#btn-mic { border-color:rgba(80,255,120,0.4); color:rgba(120,255,150,0.85); }
-#btn-mic.active { background:rgba(20,120,40,0.6); border-color:rgba(80,255,120,0.8); color:#80ff80; }
 #btn-rev { border-color:rgba(255,150,50,0.4); color:rgba(255,180,80,0.85); }
 #btn-rev.active { background:rgba(150,60,0,0.6); border-color:rgba(255,180,80,0.9); }
+#btn-mic { border-color:rgba(255,200,80,0.4); color:rgba(255,220,100,0.85); }
+#btn-mic.active { background:rgba(120,80,0,0.6); border-color:rgba(255,220,80,0.8); }
 </style>
 </head>
 <body>
@@ -511,27 +511,31 @@ function draw(){
 
   // ★音量インジケータ（マイクON時・左側縦バー）
   if(micActive){
-    const barW=14, barH=Math.min(160,H*0.3);
-    const barX=8, barY=(H-barH)/2;
+    const barW=22, barH=Math.min(180,H*0.35);
+    const barX=12, barY=(H-barH)/2;
     const pct=Math.min(1,micVolume/2.0);
     ctx.save();
-    ctx.fillStyle='rgba(40,20,0,0.6)';
+    ctx.shadowBlur=10;ctx.shadowColor='rgba(255,160,0,0.8)';
+    ctx.fillStyle='rgba(80,50,10,0.9)';
     ctx.fillRect(barX,barY,barW,barH);
-    ctx.strokeStyle='rgba(255,180,60,0.4)';
-    ctx.lineWidth=1;
-    ctx.strokeRect(barX,barY,barW,barH);
-    const fillH=barH*pct;
-    const g=ctx.createLinearGradient(0,barY+barH,0,barY);
-    g.addColorStop(0,'rgba(255,220,0,0.95)');
-    g.addColorStop(0.5,'rgba(255,140,0,0.95)');
-    g.addColorStop(1,'rgba(255,60,0,0.95)');
-    ctx.fillStyle=g;
-    ctx.shadowBlur=8;ctx.shadowColor='rgba(255,180,0,0.7)';
-    ctx.fillRect(barX,barY+barH-fillH,barW,fillH);
     ctx.shadowBlur=0;
-    ctx.font='9px monospace';ctx.textAlign='center';ctx.textBaseline='top';
-    ctx.fillStyle='rgba(255,200,80,0.7)';
-    ctx.fillText('VOL',barX+barW/2,barY+barH+4);
+    ctx.strokeStyle='rgba(255,200,80,0.95)';
+    ctx.lineWidth=2;
+    ctx.strokeRect(barX,barY,barW,barH);
+    const fillH=Math.max(3,barH*pct);
+    const g=ctx.createLinearGradient(0,barY+barH,0,barY);
+    g.addColorStop(0,'rgba(255,230,40,1)');
+    g.addColorStop(0.5,'rgba(255,150,0,1)');
+    g.addColorStop(1,'rgba(255,60,0,1)');
+    ctx.fillStyle=g;
+    ctx.shadowBlur=14;ctx.shadowColor='rgba(255,200,0,0.9)';
+    ctx.fillRect(barX+2,barY+barH-fillH,barW-4,fillH-2);
+    ctx.shadowBlur=0;
+    ctx.font='bold 12px monospace';ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillStyle='rgba(255,230,150,0.95)';
+    ctx.fillText('VOL',barX+barW/2,barY+barH+6);
+    ctx.font='10px monospace';
+    ctx.fillText(Math.round(pct*100)+'%',barX+barW/2,barY-14);
     ctx.restore();
   }
 
@@ -599,21 +603,21 @@ function updateRings(){
   pulseOffset+=(pulseTarget-pulseOffset)*0.02;
 }
 
-function updateMic(){
-  if(!analyser||!micData){rotBoost=Math.max(1,rotBoost*0.97);micFlash=Math.max(0,micFlash*0.92);return;}
-  analyser.getByteFrequencyData(micData);
-  const avg=micData.reduce((a,v)=>a+v,0)/micData.length;
-  const max=Math.max(...micData);
-  micVolume=Math.min(2.0,((avg*0.5+max*0.5)/255)*9);
-  rotBoost=rotBoost*0.72+(1+micVolume*6)*0.28;
-  micFlash=Math.min(1.0,micFlash*0.6+micVolume*0.5);
-}
-
 function toggleReverse(){
   reversed=!reversed;
   const btn=document.getElementById('btn-rev');
   if(reversed){btn.textContent='↪正転';btn.classList.add('active');}
   else{btn.textContent='↩逆転';btn.classList.remove('active');}
+}
+
+function updateMic(){
+  if(!analyser||!micData){rotBoost=Math.max(1,rotBoost*0.97);micFlash=Math.max(0,micFlash*0.92);return;}
+  analyser.getByteFrequencyData(micData);
+  const avg=micData.reduce((a,v)=>a+v,0)/micData.length;
+  const max=Math.max(...micData);
+  micVolume=Math.min(2.0,((avg*0.5+max*0.5)/255)*5);
+  rotBoost=rotBoost*0.72+(1+micVolume*6)*0.28;
+  micFlash=Math.min(1.0,micFlash*0.6+micVolume*0.5);
 }
 
 async function toggleMic(){
