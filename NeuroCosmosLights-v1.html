@@ -604,7 +604,7 @@ function updateMic(){
   analyser.getByteFrequencyData(micData);
   const avg=micData.reduce((a,v)=>a+v,0)/micData.length;
   const max=Math.max(...micData);
-  micVolume=Math.min(2.0,((avg*0.5+max*0.5)/255)*20);
+  micVolume=Math.min(2.0,((avg*0.5+max*0.5)/255)*9);
   rotBoost=rotBoost*0.72+(1+micVolume*6)*0.28;
   micFlash=Math.min(1.0,micFlash*0.6+micVolume*0.5);
 }
