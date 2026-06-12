@@ -629,9 +629,11 @@ function updateMic(){
   if(!analyser||!micData){rotBoost=Math.max(1,rotBoost*0.97);micFlash=Math.max(0,micFlash*0.9);return;}
   analyser.getByteFrequencyData(micData);
   const avg=micData.reduce((a,v)=>a+v,0)/micData.length;
-  micVolume=Math.min(2.0,(avg/128)*8);
+  const max=Math.max(...micData);
+  // ★感度を大幅アップ：平均と最大値を組み合わせ、係数を20倍に
+  micVolume=Math.min(2.0,((avg*0.5+max*0.5)/255)*20);
   rotBoost=rotBoost*0.72+(1+micVolume*6)*0.28;
-  micFlash=Math.min(1.0,micFlash*0.6+micVolume*0.5);
+  micFlash=Math.min(1.0,micFlash*0.6+micVolume*0.6);
 }
 
 function toggleReverse(){
